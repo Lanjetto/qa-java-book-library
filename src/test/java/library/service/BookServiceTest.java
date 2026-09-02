@@ -1,5 +1,6 @@
 package library.service;
 
+import library.api.dto.UpdateBookRequest;
 import library.exception.BookNotFoundException;
 import library.exception.InvalidIsbnException;
 import library.model.Author;
@@ -146,5 +147,41 @@ class BookServiceTest {
         assertThat(service.findByIdOrFallback(1L, fallback).getTitle())
                 .isEqualTo("Clean Code");
         assertThat(service.findByIdOrFallback(999L, fallback)).isSameAs(fallback);
+    }
+
+    @Test
+    @DisplayName("updateBook меняет только переданные поля")
+    void updateBookChangesOnlyProvidedFields() {
+        Book updated = service.updateBook(1L,
+                new UpdateBookRequest(null, null, null, new BigDecimal("3500.00"), BookStatus.SOLD));
+
+        assertThat(updated.getTitle()).isEqualTo("Clean Code");
+        assertThat(updated.getPrice()).isEqualByComparingTo("3500.00");
+        assertThat(updated.getStatus()).isEqualTo(BookStatus.SOLD);
+        assertThat(updated.getAuthor().getFullName()).isEqualTo("Роберт Мартин");
+    }
+
+    @Test
+    @DisplayName("updateBook отсутствующей книги — BookNotFoundException")
+    void updateBookThrowsWhenMissing() {
+        assertThatThrownBy(() -> service.updateBook(999L, new UpdateBookRequest(null, null, null, null, null)))
+                .isInstanceOf(BookNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("deleteById удаляет книгу, повторный findById бросает")
+    void deleteByIdRemovesBook() {
+        service.deleteById(1L);
+
+        assertThat(service.findAll()).hasSize(2);
+        assertThatThrownBy(() -> service.findById(1L))
+                .isInstanceOf(BookNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("deleteById отсутствующей книги — BookNotFoundException")
+    void deleteByIdThrowsWhenMissing() {
+        assertThatThrownBy(() -> service.deleteById(999L))
+                .isInstanceOf(BookNotFoundException.class);
     }
 }

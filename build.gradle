@@ -1,6 +1,7 @@
 plugins {
     id 'java'
-    id 'application'
+    id 'org.springframework.boot' version '3.5.14'
+    id 'io.spring.dependency-management' version '1.1.7'
     id 'jacoco'
 }
 
@@ -13,8 +14,8 @@ java {
     }
 }
 
-application {
-    mainClass = 'library.App'
+springBoot {
+    mainClass = 'library.LibraryApplication'
 }
 
 repositories {
@@ -25,8 +26,10 @@ dependencies {
     compileOnly 'org.projectlombok:lombok:1.18.46'
     annotationProcessor 'org.projectlombok:lombok:1.18.46'
 
-    testImplementation platform('org.junit:junit-bom:5.14.2')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'org.assertj:assertj-core:3.27.7'
 }
@@ -39,10 +42,6 @@ test {
     }
 }
 
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-}
-
 jacocoTestReport {
     dependsOn test
     reports {
@@ -53,9 +52,7 @@ jacocoTestReport {
 
 jacocoTestCoverageVerification {
     violationRules {
-        // Порог применяем к юнит-тестируемой логике (service+storage).
-        // App/DebugDemo и ООП-демо классы (Person и наследники) не покрываются тестами по замыслу
-        // — они живут в ветках start/t1/t2 как учебный код и уходят при переходе на Spring (t3+).
+        // Порог — на юнит-тестируемую логику (service+storage). Web-слой покрывается в t5/t6.
         rule {
             element = 'CLASS'
             includes = ['library.service.*', 'library.storage.*']
@@ -71,4 +68,8 @@ jacocoTestCoverageVerification {
 check {
     dependsOn jacocoTestReport
     dependsOn jacocoTestCoverageVerification
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
 }

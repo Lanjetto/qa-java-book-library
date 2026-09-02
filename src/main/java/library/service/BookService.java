@@ -1,23 +1,27 @@
 package library.service;
 
+import library.api.dto.UpdateBookRequest;
 import library.exception.BookNotFoundException;
 import library.exception.InvalidIsbnException;
+import library.model.Author;
 import library.model.Book;
 import library.model.BookStatus;
 import library.storage.BookStorage;
+import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
  * Бизнес-логика библиотеки.
- * Зависит от абстракции {@link BookStorage}, а не от конкретной реализации.
+ * Зависит от абстракции {@link BookStorage}, а не от конкретной реализации
+ * (Spring внедряет реализацию-бин через конструктор).
  */
+@Service
 public class BookService {
 
     private static final Pattern ISBN_PATTERN = Pattern.compile("\\d{13}|\\d{10}");
@@ -42,6 +46,43 @@ public class BookService {
 
     public List<Book> findAll() {
         return storage.findAll();
+    }
+
+    /**
+     * PATCH-обновление книги: меняются только не-null поля запроса.
+     * Ради наглядности сервис принимает web-DTO (UpdateBookRequest);
+     * в более крупных системах слой сервиса отделяют от HTTP собственными моделями.
+     */
+    public Book updateBook(Long id, UpdateBookRequest request) {
+        Book existing = findById(id);
+        if (request.title() != null) {
+            existing.setTitle(request.title());
+        }
+        if (request.author() != null) {
+            Author current = existing.getAuthor();
+            existing.setAuthor(new Author(
+                    current == null ? null : current.getId(),
+                    request.author(),
+                    current == null ? 0 : current.getBirthYear()));
+        }
+        if (request.year() != null) {
+            existing.setYear(request.year());
+        }
+        if (request.price() != null) {
+            existing.setPrice(request.price());
+        }
+        if (request.status() != null) {
+            existing.setStatus(request.status());
+        }
+        return storage.save(existing);
+    }
+
+    /**
+     * Удаление книги по id. Если книги нет — BookNotFoundException (404 на HTTP-слое).
+     */
+    public void deleteById(Long id) {
+        findById(id);
+        storage.deleteById(id);
     }
 
     /**

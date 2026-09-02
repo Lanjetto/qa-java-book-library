@@ -1,6 +1,7 @@
 package library.storage;
 
 import library.model.Book;
+import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -16,7 +17,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * - Map: поиск по id за O(1)
  * - List: сохранение порядка добавления
  * - Set: уникальные ISBN без дублей
+ *
+ * Spring-бин (@Repository): с t3 внедряется в BookService через BookStorage.
  */
+@Repository
 public class InMemoryBookStorage implements BookStorage {
 
     private final Map<Long, Book> booksById = new HashMap<>();
@@ -31,8 +35,25 @@ public class InMemoryBookStorage implements BookStorage {
         }
         uniqueIsbns.add(book.getIsbn());
         booksById.put(book.getId(), book);
-        booksInOrder.add(book);
+
+        // Новая книга — добавляем в конец; обновление существующего id — заменяем на месте,
+        // чтобы update (PATCH) не плодил дубли в List и не менял порядок.
+        int index = indexOfId(book.getId());
+        if (index < 0) {
+            booksInOrder.add(book);
+        } else {
+            booksInOrder.set(index, book);
+        }
         return book;
+    }
+
+    private int indexOfId(Long id) {
+        for (int i = 0; i < booksInOrder.size(); i++) {
+            if (booksInOrder.get(i).getId().equals(id)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     @Override

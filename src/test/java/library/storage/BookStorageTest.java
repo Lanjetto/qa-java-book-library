@@ -94,4 +94,18 @@ class BookStorageTest {
         assertThat(storage.getUniqueIsbns())
                 .containsExactly("9780132350884");
     }
+
+    @Test
+    @DisplayName("save с существующим id обновляет книгу без дубликата в List")
+    void saveUpdateReplacesInPlace() {
+        Book original = storage.save(book(null, "9780132350884"));
+        Book updated = storage.save(new Book(original.getId(), "9780132350884", "Renamed",
+                new Author(original.getAuthor().getId(), "Автор", 1950), 2001,
+                new BigDecimal("200.00"), BookStatus.SOLD));
+
+        assertThat(updated.getId()).isEqualTo(original.getId());
+        assertThat(storage.findAll()).singleElement()
+                .extracting(Book::getTitle, Book::getStatus)
+                .containsExactly("Renamed", BookStatus.SOLD);
+    }
 }
