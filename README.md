@@ -1,40 +1,40 @@
-# book-library — демо «библиотека книг» (ветка `start`)
+# book-library — демо «библиотека книг» (ветка `t1-junit5`)
 
-Учебный проект курса **«Java для QA»**. Ветка-контрольная точка `start` — консольное
-приложение на чистой Java 21 (Gradle), без внешних зависимостей и тестов. Это фундамент
-(Б4–Б7 Дня 1), от которого последовательно строятся все остальные ветки.
+Ветка-контрольная точка `t1-junit5` добавляет к `start` **JUnit 5** и первые юнит-тесты
+(Б8–Б9 Дня 1). Пока без AssertJ, моков и покрытия — они появятся в `t2`.
 
-## 1. Что уже есть
+## 1. Что уже есть (из `start`)
 
-- Домен «библиотека книг»: `Book`, `Author`, `BookStatus` (`AVAILABLE`, `RESERVED`, `SOLD`).
-- Абстракция хранилища `BookStorage` + реализация в памяти `InMemoryBookStorage`
-  (Map для id → O(1), List для порядка добавления, Set уникальных ISBN).
-- `BookService` — бизнес-логика: `createBook` / `findById` / `findAll` / `search` /
-  `findByStatus` / `topExpensive` / `countByStatus` / `totalPriceOf`.
-- Учебные классы ООП для Дня 1: `Person` → `Reader`, `Librarian` (наследование, полиморфизм).
-- Исключения: `BookNotFoundException`, `InvalidIsbnException`.
-- `DebugDemo` — намеренно содержит 3 бага для отработки отладки в IntelliJ IDEA.
-- Всё в пакете `library`.
+- Консольное приложение: домен `Book`/`Author`/`BookStatus`, `BookStorage` +
+  `InMemoryBookStorage`, `BookService`, учебные классы `Person`→`Reader`/`Librarian`,
+  исключения, `DebugDemo` (3 бага).
 
-## 2. Что добавлено в этой ветке
+## 2. Что добавлено в `t1-junit5`
 
-Это стартовая ветка: перечень из п.1 и есть «добавленное» относительно пустого проекта.
+- `build.gradle`: `test { useJUnitPlatform() }`, зависимости JUnit 5 (BOM 5.14.x,
+  `junit-jupiter`, `junit-platform-launcher`), лог тестов в консоль.
+- `src/test/java/library/storage/BookStorageTest.java` — поведение коллекций хранилища
+  (присвоение id, порядок `findAll`, `findById`, `deleteById`, уникальность ISBN).
+- `src/test/java/library/service/BookServiceTest.java` — бизнес-логика сервиса
+  (валидация ISBN, `findById`/`search`/`findByStatus`/`topExpensive`/`countByStatus`,
+  исключения `BookNotFoundException`, `InvalidIsbnException`).
+- Тесты написаны на чистом JUnit 5 (`org.junit.jupiter`), стиль `@BeforeEach` + `@Test`.
 
 ## 3. Как запустить / проверить
 
-- `./gradlew run` — консольный прогон шагов Дня 1. В самом конце
-  `DebugDemo.importCatalog()` падает на намеренном баге №1
-  (`NumberFormatException`, «не число») — это учебная точка для отладки, а не ошибка сборки.
-- `./gradlew build` — сборка. Тестов в `start` нет.
+- `./gradlew test` — все тесты зелёные (16 шт.).
+- `./gradlew build` — сборка с прогоном тестов.
+- Отчёт: `build/reports/tests/test/index.html`.
 
-## 4. Задание «сделай сам» (День 1)
+## 4. Задание «сделай сам» (Б8–Б9)
 
-- Добавь книгу и найди её через `service.search(...)` по названию и по автору.
-- Добавь в `Book` поле (например `int pages`) и посмотри, что сломается в
-  `equals`/`hashCode`; поправь и перегенерируй.
-- В `InMemoryBookStorage.save` добавь защиту от `null` ISBN.
-- Через отладчик IntelliJ (Shift+F9) найди и исправь по одному 3 бага в `DebugDemo`.
+- Добавь тест: поиск по автору должен находить книгу по подстроке без учёта регистра
+  (сейчас в `BookServiceTest` один такой кейс — расширь).
+- Добавь `@DisplayName` и негативный тест на `search(null)`.
+- Перенеси фабрику книг из `seedCatalog()` в отдельный метод-помощник `book(...)`.
+- Добавь тест на `totalPriceOf`.
 
 ## 5. Следующая ветка
 
-`t1-junit5` — подключение JUnit 5 и первые юнит-тесты `BookServiceTest` / `BookStorageTest`.
+`t2-lombok-assertj-coverage` — Lombok `@Data`, AssertJ, параметризованные тесты ISBN,
+JaCoCo-покрытие.
