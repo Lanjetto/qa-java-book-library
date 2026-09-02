@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    # H2 в режиме совместимости с PostgreSQL — быстрый локальный прогон репозиториев
+    # и полного контекста без Docker. TIMESTAMPTZ-сценарии и диалект Postgres —
+    # на настоящей БД (Testcontainers, Б15/t6).
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      # Как и в проде: схему строит Liquibase, Hibernate только сверяет.
+      ddl-auto: validate
+    open-in-view: false
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml

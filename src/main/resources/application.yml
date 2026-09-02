@@ -1,6 +1,19 @@
 spring:
   application:
     name: book-library
+  datasource:
+    # По умолчанию — Postgres из docker-compose.yml (порт 5434 проброшен из WSL2 наружу).
+    url: jdbc:postgresql://localhost:5434/library
+    username: library
+    password: library
+  jpa:
+    hibernate:
+      # Hibernate схему НЕ создаёт и не меняет — только сверяет сущности со схемой.
+      # Схемой управляет Liquibase (тестовая и продовая БД получают одну структуру).
+      ddl-auto: validate
+    open-in-view: false
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
 
 server:
   port: 8080

@@ -10,7 +10,8 @@ import java.math.BigDecimal;
 
 /**
  * Тело POST /api/books. Валидация — bean-валидацией (jakarta.validation),
- * контроллер помечен @Valid.
+ * контроллер помечен @Valid. Автор передаётся строкой (полное имя); год рождения
+ * в REST-контракте не передаётся и проставляется как 0 (см. {@link Author}).
  */
 public record CreateBookRequest(
         @NotBlank String isbn,
@@ -21,7 +22,7 @@ public record CreateBookRequest(
         @NotNull BookStatus status) {
 
     public Book toBook() {
-        return new Book(null, isbn, title, new Author(null, author, 0),
+        return new Book(null, isbn, title, new Author(author, 0),
                 year, price, status);
     }
 }

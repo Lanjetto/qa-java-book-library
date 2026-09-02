@@ -1,0 +1,55 @@
+# Liquibase-changelog: схема БД — кодом. Применяется при старте Spring-контекста
+# (таблица DATABASECHANGELOG хранит применённые changeset'ы, повторно они не выполняются).
+#
+# Канон домена (t4): автор книги — встроенное значение (author_full_name/author_birth_year)
+# в одной таблице books; отдельной таблицы authors нет.
+databaseChangeLog:
+  - changeSet:
+      id: 1-create-books
+      author: library
+      changes:
+        - createTable:
+            tableName: books
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: isbn
+                  type: VARCHAR(13)
+                  constraints:
+                    unique: true
+                    nullable: false
+              - column:
+                  name: title
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: author_full_name
+                  type: VARCHAR(255)
+              - column:
+                  name: author_birth_year
+                  type: INT
+              # publication_year вместо year: YEAR — зарезервированное слово в H2/ряде СУБД.
+              - column:
+                  name: publication_year
+                  type: INT
+              - column:
+                  name: price
+                  type: NUMERIC(10, 2)
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+              - column:
+                  name: created_at
+                  # TIMESTAMPTZ в Postgres = TIMESTAMP WITH TIME ZONE (абсолютный момент в UTC).
+                  # Запись в «каноническом» виде, понятном и Postgres, и H2 (режим MODE=PostgreSQL).
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
