@@ -14,12 +14,11 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Юнит-тесты BookService на чистом JUnit 5.
+ * Юнит-тесты BookService на AssertJ.
  * BookService зависит от абстракции BookStorage; здесь — реальная in-memory реализация.
  */
 class BookServiceTest {
@@ -52,8 +51,8 @@ class BookServiceTest {
         Book created = service.createBook(book("9780132778046", "New", "Автор",
                 new BigDecimal("100.00"), BookStatus.AVAILABLE));
 
-        assertEquals(4L, created.getId());
-        assertEquals(4, service.findAll().size());
+        assertThat(created.getId()).isEqualTo(4L);
+        assertThat(service.findAll()).hasSize(4);
     }
 
     @Test
@@ -62,14 +61,19 @@ class BookServiceTest {
         Book bad = book("не-isbn", "Bad", "Автор",
                 new BigDecimal("100.00"), BookStatus.AVAILABLE);
 
-        assertThrows(InvalidIsbnException.class, () -> service.createBook(bad));
+        assertThatThrownBy(() -> service.createBook(bad))
+                .isInstanceOf(InvalidIsbnException.class)
+                .hasMessageContaining("ISBN");
     }
 
     @Test
     @DisplayName("findById возвращает книгу, отсутствующую — BookNotFoundException")
     void findByIdThrowsWhenMissing() {
-        assertEquals("Clean Code", service.findById(1L).getTitle());
-        assertThrows(BookNotFoundException.class, () -> service.findById(999L));
+        assertThat(service.findById(1L).getTitle()).isEqualTo("Clean Code");
+
+        assertThatThrownBy(() -> service.findById(999L))
+                .isInstanceOf(BookNotFoundException.class)
+                .hasMessageContaining("999");
     }
 
     @Test
@@ -77,8 +81,8 @@ class BookServiceTest {
     void searchFindsByTitleSubstring() {
         List<Book> found = service.search("clean");
 
-        assertEquals(1, found.size());
-        assertEquals("Clean Code", found.get(0).getTitle());
+        assertThat(found).singleElement()
+                .extracting(Book::getTitle).isEqualTo("Clean Code");
     }
 
     @Test
@@ -86,14 +90,14 @@ class BookServiceTest {
     void searchFindsByAuthor() {
         List<Book> found = service.search("мартин");
 
-        assertEquals(1, found.size());
-        assertEquals("Clean Code", found.get(0).getTitle());
+        assertThat(found).singleElement()
+                .extracting(Book::getTitle).isEqualTo("Clean Code");
     }
 
     @Test
     @DisplayName("search с пустым запросом возвращает пустой список")
     void searchBlankReturnsEmpty() {
-        assertTrue(service.search("  ").isEmpty());
+        assertThat(service.search("  ")).isEmpty();
     }
 
     @Test
@@ -101,8 +105,9 @@ class BookServiceTest {
     void findByStatusFiltersByStatus() {
         List<Book> available = service.findByStatus(BookStatus.AVAILABLE);
 
-        assertEquals(2, available.size());
-        assertTrue(available.stream().allMatch(b -> b.getStatus() == BookStatus.AVAILABLE));
+        assertThat(available).hasSize(2)
+                .extracting(Book::getStatus)
+                .containsOnly(BookStatus.AVAILABLE);
     }
 
     @Test
@@ -110,9 +115,8 @@ class BookServiceTest {
     void topExpensiveReturnsTopByPriceDesc() {
         List<Book> top2 = service.topExpensive(2);
 
-        assertEquals(2, top2.size());
-        assertEquals("Effective Java", top2.get(0).getTitle());
-        assertEquals("Java Concurrency", top2.get(1).getTitle());
+        assertThat(top2).extracting(Book::getTitle)
+                .containsExactly("Effective Java", "Java Concurrency");
     }
 
     @Test
@@ -120,7 +124,27 @@ class BookServiceTest {
     void countByStatusGroupsCounts() {
         Map<BookStatus, Long> byStatus = service.countByStatus();
 
-        assertEquals(2L, byStatus.get(BookStatus.AVAILABLE));
-        assertEquals(1L, byStatus.get(BookStatus.RESERVED));
+        assertThat(byStatus)
+                .containsEntry(BookStatus.AVAILABLE, 2L)
+                .containsEntry(BookStatus.RESERVED, 1L);
+    }
+
+    @Test
+    @DisplayName("totalPriceOf суммирует стоимость книг одного статуса")
+    void totalPriceOfSumsByStatus() {
+        // Clean Code (3000) + Java Concurrency (4500) = 7500
+        assertThat(service.totalPriceOf(BookStatus.AVAILABLE))
+                .isEqualByComparingTo("7500.00");
+    }
+
+    @Test
+    @DisplayName("findByIdOrFallback: найденная книга или запасная")
+    void findByIdOrFallbackReturnsBookOrFallback() {
+        Book fallback = book("9780132778046", "Fallback", "Автор",
+                new BigDecimal("1.00"), BookStatus.SOLD);
+
+        assertThat(service.findByIdOrFallback(1L, fallback).getTitle())
+                .isEqualTo("Clean Code");
+        assertThat(service.findByIdOrFallback(999L, fallback)).isSameAs(fallback);
     }
 }

@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id 'application'
+    id 'jacoco'
 }
 
 group = 'library'
@@ -21,9 +22,13 @@ repositories {
 }
 
 dependencies {
+    compileOnly 'org.projectlombok:lombok:1.18.46'
+    annotationProcessor 'org.projectlombok:lombok:1.18.46'
+
     testImplementation platform('org.junit:junit-bom:5.14.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.assertj:assertj-core:3.27.7'
 }
 
 test {
@@ -36,4 +41,34 @@ test {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        // Порог применяем к юнит-тестируемой логике (service+storage).
+        // App/DebugDemo и ООП-демо классы (Person и наследники) не покрываются тестами по замыслу
+        // — они живут в ветках start/t1/t2 как учебный код и уходят при переходе на Spring (t3+).
+        rule {
+            element = 'CLASS'
+            includes = ['library.service.*', 'library.storage.*']
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.85
+            }
+        }
+    }
+}
+
+check {
+    dependsOn jacocoTestReport
+    dependsOn jacocoTestCoverageVerification
 }
