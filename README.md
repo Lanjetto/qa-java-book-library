@@ -1,71 +1,61 @@
-# book-library — демо «библиотека книг» (ветка `t8-smoke-regression`)
+# book-library — демо «библиотека книг» (ветка `t9-allure-ci`)
 
-Ветка-контрольная точка `t8` — про **стабильность прогона** (Б17), «не верить зелёному»:
-smoke-проверка живости (`/actuator/health`), регресс-сценарий по всем статусам книги
-и точечная параллель JUnit 5 там, где тесты изолированы.
+Ветка-контрольная точка `t9` про то, как сделать прогон **объяснимым** и как автотесты
+живут в **CI** (Б18–Б19): Allure-отчёт поверх JUnit 5 и пайплайн «как код».
 
-## 1. Что уже есть (из `t7`)
+## 1. Что уже есть (из `t8`)
 
-- REST + JPA/Liquibase; Spring Security (basic auth) + RabbitMQ (`book.created`);
-  Testcontainers-инфраструктура docker-тестов; REST Assured e2e, timezone-тест.
+- REST + JPA/Liquibase; Security + RabbitMQ; Testcontainers; Actuator (`/actuator/health`),
+  smoke-тест, регресс-сценарий по статусам, точечная параллель JUnit 5.
 
-## 2. Что добавлено в `t8`
+## 2. Что добавлено в `t9`
 
-- **Spring Boot Actuator** (`spring-boot-starter-actuator`): `/actuator/health` — «точка живости».
-  В `application.yml` включён web-эндпоинт `health` и `show-details: always` (для показа на занятии;
-  в проде детали обычно скрывают — они раскрывают версии и состояние БД). В SecurityConfig
-  (`!test`) `/actuator/health` уже был permitAll — smoke работает без авторизации.
-- **Smoke-тест** `LibrarySmokeTest` (`@Tag("smoke")`, Б17): поднимает полный контекст и ждёт от
-  `/actuator/health` код 200 и `status=UP`. Если приложение не стартует — smoke красный раньше,
-  чем побегут долгие сценарии. Тег позволяет гонять быструю выборку отдельно:
-  `./gradlew test --tests '*LibrarySmokeTest'`.
-- **Регресс-сценарий** `BookLifecycleRegressionTest` (пакет `library.regression`): полный жизненный
-  цикл статусов AVAILABLE → RESERVED → SOLD через REST, на каждом шаге перечитывает объект и
-  сверяется. Пример изоляции (главное против флаков): книга создаётся с уникальным ISBN
-  (`BookMother.unique()`), а листинг/поиск проверяются «по своей книге», а не «всего должно быть N»
-  — такой тест не зависит от того, что до него сделали другие тесты/запуски.
-- **Параллельный запуск JUnit 5** (Б17):
-  - `junit-platform.properties`: `parallel.enabled=true`, но режим по умолчанию — `same_thread`
-    (параллель выключена, пока её явно не попросят);
-  - класс **без общего состояния** помечен `@Execution(CONCURRENT)` — `BookServiceTest`
-    (юнит на Mockito: у каждого теста свои моки, БД нет) → его методы бегут в 3 потока
-    (динамический пул: ядра × 0.75);
-  - почему НЕ включаем параллель для всех классов сразу — см. javadoc `junit-platform.properties`
-    (общая in-memory H2 и блокировка Liquibase при одновременном старте контекстов).
-    Правило: **сначала изоляция, потом параллель**.
+- **Allure** (Б19), три части: адаптер `io.qameta.allure:allure-junit5:2.27.0` пишет JSON на каждый
+  тест в `build/allure-results/`; плагин `io.qameta.allure` (в `plugins {}`) генератор собирает из них
+  статический HTML (`./gradlew allureReport`); метаданные отчёта лежат в `src/test/resources/allure/`:
+  `environment.properties` (вкладка Overview) и `categories.json` (Product/Test defects).
+- **Аннотации в тестах:**
+  - `@Epic/@Feature/@Story` — иерархия для вкладки **Behaviors** (`BookApiContextTest` и
+    `BookLifecycleRegressionTest`: Epic «Книги», Feature «REST API…» / «Жизненный цикл статусов»);
+  - `@Step("… {id}")` — HTTP-вызовы регресс-сценария (`createBook`/`book`/`patchStatus`) видны
+    ступенями в дереве теста (weaving через `aspectjweaver=true` в `allure {}`);
+  - `@Description`, `@Severity` — контекст и приоритет теста.
+- **CI (Б18):**
+  - `Jenkinsfile` — declarative pipeline: `stage('Сборка и тесты')` → `stage('Allure-отчёт')`,
+    артефакты и JUnit-XML архивируются в `post { always { … } }` (сохраняются и при падении);
+    интеграционные docker-тесты закомментированы (им нужен Docker-агент);
+  - `ci.sh` — локальный симулятор тех же шагов без Jenkins (`./gradlew test` + `./gradlew allureReport`).
+- `build.gradle`: конфигурация `allure { version = '2.27.0'; autoconfigure = true; aspectjweaver = true }`;
+  после генерации отчёт поднимается на уровень `build/reports/allure-report/`, чтобы `index.html` лежал
+  по ожидаемому пути (плагин кладёт его в подпапку). Встроенный `copyCategories` отключён —
+  категории кладём сами (на повторном прогоне его маркер-файл ронял `allureReport`).
+
+> Версии: плагин Allure 3.2.0 (под Gradle 9.7), раннер/адаптер Allure 2.27.0. Allure — слой отчётности
+> **над** JUnit 5, а не замена раннера: падение по-прежнему фейлит сборку, Allure делает его объяснимым.
 
 ## 3. Как запустить / проверить
 
 ```
-./gradlew build              # без Docker: юниты (параллельно) + H2-слайсы + smoke + регресс; docker-теги не трогает
-./gradlew integrationTest    # с Docker: Postgres + RabbitMQ в контейнерах (10 тестов, из t6/t7)
+./gradlew build                  # без Docker: юниты + H2-слайсы + smoke/регресс (docker-теги не трогает)
+./gradlew test allureReport      # сгенерировать отчёт
+# открыть: build/reports/allure-report/index.html  (вкладки Behaviors, Suites, Timeline, Categories)
+./gradlew allureServe            # или поднять локальный сервер отчёта
+./ci.sh                          # локальный симулятор CI-пайплайна (те же шаги, что в Jenkinsfile)
+./gradlew integrationTest        # с Docker: Postgres + RabbitMQ (10 тестов из t6/t7)
 ```
-Запуск руками (compose в WSL):
-```
-docker compose up -d postgres rabbitmq
-./gradlew bootRun            # http://localhost:8080
-curl -s http://localhost:8080/actuator/health                     # {"status":"UP", ...} — без авторизации
-curl -s -u admin:secret http://localhost:8080/actuator/health     # то же, детали (show-details=always)
-```
-Повторяемость параллельного прогона:
-```
-./gradlew test               # прогнать 3 раза подряд — все зелёные (BookServiceTest идёт в 3 потока)
-```
-> **Где проверено:** `./gradlew build` локально (Windows, ✅; юниты бегут в 3 потока, smoke/регресс зелёные).
-> `./gradlew integrationTest` — в WSL2 с Docker (✅, 10 тестов из t6/t7).
+> **Где проверено:** локально (Windows, ✅): `./gradlew build`, `./gradlew test allureReport` и `./ci.sh`
+> (дважды подряд — повторяемость). В отчёте видны ступени `@Step`, теги/`@Epic` (Behaviors),
+> `environment.properties`/`categories.json`. `Jenkinsfile` — линт/ревью (живого Jenkins нет).
 
-## 4. Задание «сделай сам» (Б17)
+## 4. Задание «сделай сам» (Б19)
 
-1. Добавь smoke на ещё один эндпоинт, например `/actuator/info`: включи `info` в
-   `management.endpoints.web.exposure.include`, добавь блок `info` в `application.yml` и проверь в тесте.
-2. **Регресс-задача:** напиши тест, который «завидует порядку», — например, в начале класса создаёт
-   книгу со *фиксированным* ISBN (не `BookMother.unique()`) и ожидает в листинге ровно одну такую.
-   Прогони класс дважды / вместе с соседними — увидишь флак от общего состояния. Почини изоляцией:
-   уникальный ISBN и проверка «по своей книге».
-3. Объясни, почему ретраи флаков — костыль, а не лечение (первопричина — общее состояние), и чем
-   параллель усугубляет проблему.
+1. Разметь `@Step` свой e2e-сценарий (например, `BookCrudTest`) и открой отчёт — увидишь дерево шагов.
+2. Добавь в `Jenkinsfile` этап `Publish Allure Report` (например, через плагин `allure-jenkins-plugin`)
+   или шаг архивации ещё одного артефакта.
+3. Объясни, почему Allure-результаты (`allure-results`) архивируют отдельно от HTML-отчёта (тренды,
+   пересборка отчёта из нескольких прогонов) и почему `post { always }`, а не `onSuccess`.
 
 ## 5. Следующая ветка
 
-`t9-allure-ci` — Allure-отчёты (плагин, `@Step`/`@Tag`/`@Description`, генерация отчёта) и CI:
-`Jenkinsfile` + `ci.sh` — локальный симулятор пайплайна (Б18–Б19).
+`t10-load-jfr` — нагрузка Gatling (сценарий на `/api/books`) и профилирование JVM:
+JFR-запись, async-profiler, JMH-бенчмарк, virtual threads (Б20–Б21).

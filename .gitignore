@@ -3,6 +3,9 @@ build/
 .gradle/
 *.log
 
+# AspectJ (allure aspectjweaver) иногда пишет дампы ajcore.*.txt в корень
+ajcore.*.txt
+
 # IDE
 .idea/
 *.iml

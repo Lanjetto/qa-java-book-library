@@ -3,6 +3,9 @@ plugins {
     id 'org.springframework.boot' version '3.5.14'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'jacoco'
+    // t9 (Б18/Б19): Allure-отчёт + генерация HTML (таски allureReport/allureServe). Версия самого
+    // плагина — отдельно от версии allure-junit5 (ниже в allure { version }).
+    id 'io.qameta.allure' version '3.2.0'
 }
 
 group = 'library'
@@ -41,6 +44,9 @@ dependencies {
     testRuntimeOnly 'com.h2database:h2'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // t9 (Б19): адаптер Allure для JUnit5 — пишет JSON-результаты на каждый тест в allure-results;
+    // аннотации @Step/@Description/@Severity/@Epic/@Feature приходят вместе с ним.
+    testImplementation 'io.qameta.allure:allure-junit5:2.27.0'
     testImplementation 'org.assertj:assertj-core:3.27.7'
     // t5: REST Assured (Б13), Mockito-юнит сервиса и Instancio (Б14) — генерация случайных данных.
     // Mockito уже приходит в starter-test; пин 5.23.0 — чтобы версии core/junit-jupiter не разъехались.
@@ -117,6 +123,41 @@ jacocoTestCoverageVerification {
 check {
     dependsOn jacocoTestReport
     dependsOn jacocoTestCoverageVerification
+}
+
+// t9 (Б19): Allure. Версия раннера/адаптера — 2.27.0; плагин (autoconfigure) сам добавит
+// allure-junit5 к тестам и будет знать, где лежат JSON-результаты.
+allure {
+    version = '2.27.0'
+    autoconfigure = true
+    // Ступени @Step требуют load-time weaving через aspectjweaver — плагин добавит javaagent к test JVM.
+    aspectjweaver = true
+}
+
+// Метаданные отчёта (environment.properties, categories.json) адаптер не генерирует — их кладут
+// в $buildDir/allure-results рядом с JSON-результатами ДО генерации HTML. Источник — src/test/resources/allure.
+// Плагин 3.2.0: встроенный copyCategories на повторном прогоне валит allureReport
+// (маркер-«файл» становится директорией). categories.json и так кладём сами — task ниже
+// (copyAllureMeta), поэтому встроенную копию отключаем.
+tasks.named('copyCategories') {
+    enabled = false
+}
+
+def copyAllureMeta = tasks.register('copyAllureMeta', Copy) {
+    from 'src/test/resources/allure'
+    into layout.buildDirectory.dir('allure-results')
+}
+tasks.named('allureReport') {
+    dependsOn 'test'          // JSON-результаты уже сгенерированы
+    dependsOn copyAllureMeta
+    doLast {
+        // Плагин кладёт отчёт в подпапку …/allure-report/allureReport — поднимаем его содержимое
+        // на уровень build/reports/allure-report, чтобы index.html лежал по ожидаемому пути.
+        copy {
+            from layout.buildDirectory.dir('reports/allure-report/allureReport')
+            into layout.buildDirectory.dir('reports/allure-report')
+        }
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {

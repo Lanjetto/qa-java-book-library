@@ -1,5 +1,10 @@
 package library.api;
 
+import io.qameta.allure.Description;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -24,6 +29,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code ./gradlew test --tests '*LibrarySmokeTest'}); в дефолтный прогон он входит, в отличие от
  * {@code @Tag("docker")}. {@code /actuator/health} в SecurityConfig (профиль !test) — permitAll.
  */
+@Epic("Книги")
+@Feature("Живость приложения (Actuator)")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Tag("smoke")
@@ -34,6 +41,9 @@ class LibrarySmokeTest {
 
     @Test
     @DisplayName("smoke: /actuator/health отвечает 200 и status=UP — приложение живо")
+    @Description("Быстрая проверка «можно ли начинать прогон»: полный контекст поднимается, "
+            + "health отвечает 200/UP. Тег @Tag(\"smoke\") позволяет гонять выборку отдельно.")
+    @Severity(SeverityLevel.CRITICAL)
     void healthIsUp() {
         ResponseEntity<Map> resp = rest.getForEntity("/actuator/health", Map.class);
 

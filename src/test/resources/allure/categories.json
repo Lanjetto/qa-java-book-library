@@ -1,0 +1,11 @@
+[
+  {
+    "name": "Product defects (ассерт не сошёлся)",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*AssertionError.*"
+  },
+  {
+    "name": "Test defects (тест сломался)",
+    "matchedStatuses": ["broken"]
+  }
+]

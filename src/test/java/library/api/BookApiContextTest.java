@@ -1,5 +1,7 @@
 package library.api;
 
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Контекст один на класс и НЕ откатывает транзакции (HTTP идёт «наружу»), поэтому каждый
  * тест создаёт книги с уникальными ISBN — данные между тестами не конфликтуют.
  */
+// t9 (Б19): Allure-лейблы — тот же Epic «Книги», что и у регресс-сценария, другая Feature.
+@Epic("Книги")
+@Feature("REST API: CRUD и поиск")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class BookApiContextTest {

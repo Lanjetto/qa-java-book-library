@@ -1,5 +1,12 @@
 package library.regression;
 
+import io.qameta.allure.Description;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
+import io.qameta.allure.Step;
+import io.qameta.allure.Story;
 import library.testdata.BookMother;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +40,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>после PATCH всегда читаем объект заново и сверяемся с ожиданием на конкретном id.</li>
  * </ul>
  */
+// t9 (Б19): Allure-лейблы строят иерархию Behaviors (Epic → Feature → Story).
+@Epic("Книги")
+@Feature("Жизненный цикл статусов")
+@Story("Регресс-сценарий AVAILABLE → RESERVED → SOLD")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class BookLifecycleRegressionTest {
@@ -40,6 +51,8 @@ class BookLifecycleRegressionTest {
     @Autowired
     private TestRestTemplate rest;
 
+    /** Создание книги — отдельный шаг отчёта (@Step): каждый HTTP-вызов виден в дереве теста. */
+    @Step("Создать книгу с уникальным ISBN (AVAILABLE)")
     private Long createBook() {
         // BookMother.unique() — CREATE-запрос со случайным (уникальным) ISBN и статусом AVAILABLE.
         ResponseEntity<Map> resp = rest.postForEntity("/api/books", BookMother.unique(), Map.class);
@@ -49,14 +62,18 @@ class BookLifecycleRegressionTest {
         return ((Number) id).longValue();
     }
 
+    /** Чтение книги — шаг отчёта; аргумент {id} подставляется в название ступени. */
     @SuppressWarnings("unchecked")
+    @Step("Получить книгу по id={id}")
     private Map<String, Object> book(Long id) {
         ResponseEntity<Map> resp = rest.getForEntity("/api/books/{id}", Map.class, id);
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         return resp.getBody();
     }
 
+    /** Смена статуса — шаг отчёта (старый статус → новый). */
     @SuppressWarnings("unchecked")
+    @Step("Сменить статус книги id={id} → {status}")
     private Map<String, Object> patchStatus(Long id, String status) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -80,6 +97,9 @@ class BookLifecycleRegressionTest {
 
     @Test
     @DisplayName("жизненный цикл статусов AVAILABLE → RESERVED → SOLD: каждая смена видна в чтении/листинге/поиске")
+    @Description("Сквозной регресс: книга создаётся и проходит все статусы; проверки изолированы "
+            + "(уникальный ISBN, поиск «по своей книге»), тест не зависит от порядка выполнения.")
+    @Severity(SeverityLevel.CRITICAL)
     void fullStatusLifecycle() {
         Long id = createBook();
 
