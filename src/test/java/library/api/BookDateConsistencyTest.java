@@ -64,12 +64,17 @@ class BookDateConsistencyTest extends AbstractPostgresIT {
         created.clear();
     }
 
+    /** API с t7 защищён basic auth — ходим от имени admin/secret (см. application.yml). */
+    private io.restassured.specification.RequestSpecification auth() {
+        return given(requestSpec()).auth().preemptive().basic("admin", "secret");
+    }
+
     @Test
     @DisplayName("createdAt из API и из БД — один и тот же момент; формат в JSON — UTC (Z)")
     void createdAtIsSameInApiAndDb() {
         CreateBookRequest request = BookMother.unique();
 
-        Integer id = given(requestSpec())
+        Integer id = auth()
                 .body(request)
                 .when().post("/api/books")
                 .then()
@@ -80,7 +85,7 @@ class BookDateConsistencyTest extends AbstractPostgresIT {
         created.add(id.longValue());
 
         // значение из JSON (прошло туда-обратно через HTTP/Jackson)
-        String apiValue = given(requestSpec())
+        String apiValue = auth()
                 .when().get("/api/books/{id}", id)
                 .then().statusCode(200)
                 .extract().path("createdAt");

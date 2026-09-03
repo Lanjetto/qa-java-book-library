@@ -3,6 +3,7 @@ package library.service;
 import library.api.dto.UpdateBookRequest;
 import library.exception.BookNotFoundException;
 import library.exception.InvalidIsbnException;
+import library.messaging.BookEventPublisher;
 import library.model.Author;
 import library.model.Book;
 import library.repository.BookRepository;
@@ -16,6 +17,9 @@ import java.util.regex.Pattern;
  * Вместо in-memory хранилища внедряется {@link BookRepository}; «толстые» учебные методы
  * Дня 1 (topExpensive/totalPriceOf/countByStatus/findByStatus/findByIdOrFallback) убраны —
  * они остались в истории ветки {@code start} и не нужны REST-слою.
+ *
+ * <p>С t7 (Б16): создание книги публикует доменное событие {@code book.created} через
+ * {@link BookEventPublisher} — сервис не зависит от RabbitTemplate, а от границы интерфейса.
  */
 @Service
 public class BookService {
@@ -23,16 +27,21 @@ public class BookService {
     private static final Pattern ISBN_PATTERN = Pattern.compile("\\d{13}|\\d{10}");
 
     private final BookRepository repository;
+    private final BookEventPublisher eventPublisher;
 
-    public BookService(BookRepository repository) {
+    public BookService(BookRepository repository, BookEventPublisher eventPublisher) {
         this.repository = repository;
+        this.eventPublisher = eventPublisher;
     }
 
     public Book createBook(Book book) {
         if (book.getIsbn() == null || !ISBN_PATTERN.matcher(book.getIsbn()).matches()) {
             throw new InvalidIsbnException(book.getIsbn());
         }
-        return repository.save(book);
+        Book saved = repository.save(book);
+        // Внешняя интеграция: факт публикации проверяем отдельно (брокер не мокаем в docker-тестах).
+        eventPublisher.publishCreated(saved);
+        return saved;
     }
 
     public Book findById(Long id) {

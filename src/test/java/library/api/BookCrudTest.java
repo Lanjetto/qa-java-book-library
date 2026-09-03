@@ -1,6 +1,7 @@
 package library.api;
 
 import io.restassured.RestAssured;
+import io.restassured.specification.RequestSpecification;
 import library.api.dto.CreateBookRequest;
 import library.testcontainers.AbstractPostgresIT;
 import library.testdata.BookMother;
@@ -25,11 +26,14 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.notNullValue;
 
 /**
- * Интеграционный e2e-CRUD по HTTP на REST Assured (Б13 + Б15, ветки t5/t6).
+ * Интеграционный e2e-CRUD по HTTP на REST Assured (Б13 + Б15 + Б16, ветки t5/t6/t7).
  *
  * <p>Приложение поднимается целиком ({@code @SpringBootTest}) и ходит через REST Assured DSL:
- * {@code given().when().then()} читается как предложение. Postgres — НЕ внешний и НЕ docker-compose:
- * тест сам поднимает контейнер (Testcontainers, {@link AbstractPostgresIT}), т.е. e2e самодостаточен.
+ * {@code given().when().then()} читается как предложение. Postgres и RabbitMQ — НЕ внешние:
+ * их поднимает сам тест (Testcontainers, {@link AbstractPostgresIT}), т.е. e2e самодостаточен.
+ *
+ * <p>С t7 (Б16) API защищён basic auth: запросы идут с заголовком {@code Authorization: Basic} (admin/secret),
+ * негативный тест проверяет 401 без авторизации.
  *
  * <p>Тест помечен {@code @Tag("docker")} — в дефолтный {@code ./gradlew test} не входит и запускается
  * таской {@code integrationTest} там, где есть Docker. HTTP-тест ходит «наружу», поэтому
@@ -57,14 +61,20 @@ class BookCrudTest extends AbstractPostgresIT {
     @AfterEach
     void cleanUp() {
         for (Long id : created) {
-            given().when().delete("/api/books/{id}", id);   // best-effort: тесты уже могли удалить
+            given(asAdmin()).when().delete("/api/books/{id}", id);   // best-effort: тесты уже могли удалить
         }
         created.clear();
     }
 
+    /** Общий запрос + basic auth (учётка из application.yml: admin/secret). */
+    private RequestSpecification asAdmin() {
+        return given(requestSpec())
+                .auth().preemptive().basic("admin", "secret");
+    }
+
     /** Создание книги через API. Возвращает id из ответа; id запоминается для очистки. */
     private Integer createBook(CreateBookRequest request) {
-        Integer id = given(requestSpec())
+        Integer id = given(asAdmin())
                 .body(request)
                 .when()
                 .post("/api/books")
@@ -77,6 +87,13 @@ class BookCrudTest extends AbstractPostgresIT {
     }
 
     @Test
+    @DisplayName("без авторизации → 401 (basic auth)")
+    void unauthenticatedRequestReturns401() {
+        given(requestSpec()).when().get("/api/books")
+                .then().statusCode(401);
+    }
+
+    @Test
     @DisplayName("CRUD: создать 201 → прочитать → PATCH → удалить 204 → после удаления 404")
     void createReadPatchDelete() {
         CreateBookRequest request = BookMother.unique();
@@ -84,7 +101,7 @@ class BookCrudTest extends AbstractPostgresIT {
         Integer id = createBook(request);
 
         // чтение созданного — поля совпадают с тем, что отправили
-        given(requestSpec())
+        given(asAdmin())
                 .when().get("/api/books/{id}", id)
                 .then().spec(okJson())
                 .body("isbn", equalTo(request.isbn()))
@@ -93,7 +110,7 @@ class BookCrudTest extends AbstractPostgresIT {
                 .body("status", equalTo("AVAILABLE"));
 
         // PATCH меняет только переданные поля
-        given(requestSpec())
+        given(asAdmin())
                 .body(Map.of("status", "SOLD"))
                 .when().patch("/api/books/{id}", id)
                 .then()
@@ -102,16 +119,16 @@ class BookCrudTest extends AbstractPostgresIT {
                 .body("title", equalTo(request.title()));   // не трогали — не изменилось
 
         // DELETE → 204, повторный GET → 404
-        given(requestSpec()).when().delete("/api/books/{id}", id)
+        given(asAdmin()).when().delete("/api/books/{id}", id)
                 .then().statusCode(204);
-        given(requestSpec()).when().get("/api/books/{id}", id)
+        given(asAdmin()).when().get("/api/books/{id}", id)
                 .then().statusCode(404);
     }
 
     @Test
     @DisplayName("GET /api/books/{id} несуществующей книги → 404 + ErrorResponseDto с путём")
     void getMissingBookReturns404ErrorDto() {
-        given(requestSpec())
+        given(asAdmin())
                 .when().get("/api/books/{id}", 9_999_999_999L)
                 .then()
                 .statusCode(404)
@@ -130,7 +147,7 @@ class BookCrudTest extends AbstractPostgresIT {
                 "price", 100.0,
                 "status", "AVAILABLE");
 
-        given(requestSpec())
+        given(asAdmin())
                 .body(invalid)
                 .when().post("/api/books")
                 .then()
@@ -145,7 +162,7 @@ class BookCrudTest extends AbstractPostgresIT {
         CreateBookRequest request = BookMother.unique();
         Integer id = createBook(request);
 
-        given(requestSpec())
+        given(asAdmin())
                 .when().get("/api/books")
                 .then().spec(okJson())
                 .body("id", hasItem(id));

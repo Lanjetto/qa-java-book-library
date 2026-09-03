@@ -31,6 +31,9 @@ dependencies {
     // t4: доступ к БД (Spring Data JPA + Hibernate), миграции схемы (Liquibase)
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.liquibase:liquibase-core'
+    // t7: Spring Security (basic auth) + RabbitMQ (событие book.created) — Б16
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
     // драйверы БД: Postgres — «продовый» профиль; H2 — только для тестов (профиль test)
     runtimeOnly 'org.postgresql:postgresql'
     testRuntimeOnly 'com.h2database:h2'
@@ -46,7 +49,10 @@ dependencies {
     // spring-boot-testcontainers даёт @ServiceConnection (DataSource настраивается под контейнер автоматически).
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:postgresql:1.21.4'
+    testImplementation 'org.testcontainers:rabbitmq:1.21.4'
     testImplementation 'org.testcontainers:junit-jupiter:1.21.4'
+    // t7: @WithMockUser для web-слайсов
+    testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

@@ -14,6 +14,22 @@ spring:
     open-in-view: false
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.yaml
+  # t7 (Б16): basic auth для API. Учётка — для демо-стенда, в проде обычно Bearer/JWT.
+  security:
+    user:
+      name: admin
+      password: secret
+  rabbitmq:
+    # Брокер из docker-compose.yml (в WSL2); в интеграционных тестах — контейнер Testcontainers.
+    host: localhost
+    port: 5672
+
+# Кастомные настройки обмена событиями (t7): exchange/routing/очередь для события book.created.
+app:
+  mq:
+    exchange: library.events
+    created-queue: q.book.created
+    created-routing: book.created
 
 server:
   port: 8080

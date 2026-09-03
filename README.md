@@ -1,56 +1,62 @@
-# book-library — демо «библиотека книг» (ветка `t6-testcontainers-e2e`)
+# book-library — демо «библиотека книг» (ветка `t7-security-rabbitmq`)
 
-Ветка-контрольная точка `t6` переводит интеграционные тесты на **Testcontainers** (Б15):
-тест **сам поднимает настоящий Postgres-контейнер** и накатывает Liquibase — внешний Postgres
-из docker-compose для `integrationTest` больше не нужен. `BookCrudTest` становится самодостаточным e2e.
+Ветка-контрольная точка `t7` добавляет две «настоящие» интеграции (Б16): **Spring Security (basic auth)**
+для `/api/**` и событие **`book.created`** в RabbitMQ при создании книги. Тестируются авторизация (401/403)
+и факт реальной публикации события — брокер не мокается (правило Б15).
 
-## 1. Что уже есть (из `t5`)
+## 1. Что уже есть (из `t6`)
 
-- REST Assured `BookCrudTest`/`BookApiSpecs`, Mockito-юниты `BookServiceTest`, `BookMother`/Instancio,
-  timezone-тест `BookDateConsistencyTest` — все `@Tag("docker")`-интеграции против внешнего Postgres.
-- Таска `integrationTest` (docker-теги исключены из дефолтного `test`).
+- REST + JPA/Liquibase; Testcontainers (`AbstractPostgresIT`: Postgres + RabbitMQ на весь docker-прогон);
+  REST Assured e2e `BookCrudTest`, timezone-тест, `BookRepositoryPostgresTest`.
 
-## 2. Что добавлено в `t6`
+## 2. Что добавлено в `t7`
 
-- **Зависимости (test):** `spring-boot-testcontainers` (даёт `@ServiceConnection`), `testcontainers:postgresql`
-  и `testcontainers:junit-jupiter` 1.21.4.
-- **`AbstractPostgresIT`** (`library.testcontainers`) — один Postgres-контейнер `postgres:16-alpine` на весь
-  docker-прогон: `@ServiceConnection` настраивает `DataSource` под контейнер (без ручного
-  `@DynamicPropertySource`), Liquibase применяется в контейнер.
-  - ⚠️ Контейнер стартуется вручную (`static { }`), а не `@Testcontainers`/`@Container`: расширение
-    останавливает static-контейнер **после каждого тест-класса**, а Spring кэширует application-context
-    на остановленную БД → следующий класс падает. Один живой контейнер на JVM — надёжнее.
-- **`BookCrudTest`** переведён с внешнего Postgres (порт 5434) на контейнер — e2e больше не требует
-  `docker compose up` заранее.
-- **`BookDateConsistencyTest`** — timezone/Instant-проверка тоже на контейнерной БД.
-- **`BookRepositoryPostgresTest`** — `@DataJpaTest` + `@AutoConfigureTestDatabase(replace = NONE)`
-  (используем контейнер вместо H2): `findByStatus`/`findByTitleContainingIgnoreCase`/`findByIsbn`
-  на настоящем Postgres (диалект не эмулируется).
+- **Spring Security** (`spring-boot-starter-security`): `library/config/SecurityConfig.java` —
+  `SecurityFilterChain` для `/api/**` (httpBasic, CSRF off, `/actuator/health` — permitAll под будущий t8);
+  учётка `admin/secret` из `application.yml` (`spring.security.user.*`). Профиль `test` (H2-контексты) — open.
+- **RabbitMQ** (`spring-boot-starter-amqp`): `library/messaging/`
+  - `BookCreatedEvent(id, isbn, title)` — record, в очереди сериализуется JSON (`Jackson2JsonMessageConverter`);
+  - интерфейс `BookEventPublisher` + `RabbitBookEventPublisher` (реальный `convertAndSend`, не в профиле `test`)
+    и `NoopBookEventPublisher` (профиль `test`: без брокера H2-контексты не падают);
+  - `MessagingConfig` — exchange `library.events`, очередь `q.book.created`, binding по `book.created`;
+  - `BookCreatedLoggerListener` — демо-потребитель (лог).
+  - `BookService.createBook` после сохранения публикует событие через `BookEventPublisher` (сервис зависит
+    от интерфейса, не от RabbitTemplate).
+- **docker-compose.yml**: добавлен сервис `rabbitmq:3-management` (5672 + 15672).
+- **Тесты:**
+  - авторизация: web-слайс `BookApiSliceTest` — `@WithMockUser` (+ `.with(csrf())` для POST: в `@WebMvcTest`
+    работает дефолтный security с CSRF); e2e `BookCrudTest` ходит с `.auth().preemptive().basic("admin","secret")`
+    и проверяет **401 без авторизации**;
+  - `BookEventPublisherTest` (docker): probe-очередь на тот же exchange/routing, создание книги →
+    `rabbit.receive(...)` ловит JSON-событие из настоящего RabbitMQ-контейнера;
+  - `BookDateConsistencyTest`/`BookRepositoryPostgresTest` — обновлены под basic auth/контейнеры.
 
 ## 3. Как запустить / проверить
 
-Нужен **Docker**. Интеграционные (`@Tag("docker")`) исключены из дефолтного прогона:
 ```
-./gradlew build              # без Docker: юниты + H2-слайсы, docker-теги не трогает
-./gradlew integrationTest    # с Docker: Testcontainers сам поднимает Postgres (8 тестов)
+./gradlew build              # без Docker: юниты + H2-слайсы; docker-теги не трогает
+./gradlew integrationTest    # с Docker: Postgres + RabbitMQ в контейнерах (10 тестов)
 ```
-В этой сессии `integrationTest` прогнан **внутри WSL2** (там доступен docker-сокет):
+Запуск руками (compose в WSL):
 ```
-wsl -e bash -lc "cd ~/it/book-library && ./gradlew integrationTest"
+docker compose up -d postgres rabbitmq
+./gradlew bootRun            # http://localhost:8080
+curl -s http://localhost:8080/api/books                     # → 401
+curl -s -u admin:secret http://localhost:8080/api/books     # → 200
+# в логе bootRun после создания книги: «Получено событие book.created: …»
 ```
-> **Где проверено:** `./gradlew build` локально (Windows, ✅, docker-теги не входят); `./gradlew
-> integrationTest` — в WSL2 с Docker (✅ 8 тестов: BookCrudTest e2e-CRUD 4, BookDateConsistencyTest 1,
-> BookRepositoryPostgresTest 3). БД поднимал сам тест, внешний Postgres не требовался.
+> **Где проверено:** `./gradlew build` локально (Windows, ✅); `./gradlew integrationTest` — в WSL2
+> с Docker (✅ 10 тестов, включая 401 и доставку события в RabbitMQ).
 
-## 4. Задание «сделай сам» (Б15)
+## 4. Задание «сделай сам» (Б16)
 
-1. Добавь в e2e `BookCrudTest` сценарий поиска без учёта регистра (`GET /api/books?search=`) на настоящем
-   Postgres и негативный e2e: удаление несуществующей книги → 404.
-2. Попробуй `.withReuse(true)` (при `TESTCONTAINERS_REUSE_ENABLE=true`) и объясни, почему на CI reuse
-   выключен (БД хранит состояние между прогонами).
-3. Сравни «H2-гибрид» (быстрые slice-тесты в IDE) с интеграционными на Testcontainers — что покрывает каждый.
+1. Добавь роль «админ»/«user» и тест 403: `user` не может, например, DELETE книгу.
+2. Напиши второго потребителя события (своя очередь/логика) или прочитай сообщение из `q.book.created`
+   через Management UI (http://localhost:15672).
+3. Объясни, почему продюсер не ждёт ответа потребителя и как проверить, что событие реально ушло
+   (не замокано).
 
 ## 5. Следующая ветка
 
-`t7-security-rabbitmq` — Spring Security (basic auth) + RabbitMQ-эмиттер `book.created`; тесты с
-авторизацией (401/403) и публикацией события (Б16).
+`t8-smoke-regression` — Spring Boot Actuator (`/actuator/health`), smoke/регресс-сценарий по всем статусам
+книги и параллельный запуск тестов (Б17).

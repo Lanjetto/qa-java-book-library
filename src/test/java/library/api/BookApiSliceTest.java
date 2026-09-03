@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -17,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -31,6 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * (в Boot 3.4+ переехал в org.springframework.test.context.bean.override.mockito).
  */
 @WebMvcTest(BookApi.class)
+@WithMockUser
 class BookApiSliceTest {
 
     @Autowired
@@ -78,7 +81,8 @@ class BookApiSliceTest {
     void createWithMissingIsbnReturns400() throws Exception {
         mvc.perform(post("/api/books")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"title\":\"Без ISBN\"}"))
+                        .content("{\"title\":\"Без ISBN\"}")
+                        .with(csrf()))    // в @WebMvcTest дефолтный security с CSRF — добавляем токен
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").exists());
     }

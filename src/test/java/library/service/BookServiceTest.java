@@ -3,6 +3,7 @@ package library.service;
 import library.api.dto.UpdateBookRequest;
 import library.exception.BookNotFoundException;
 import library.exception.InvalidIsbnException;
+import library.messaging.BookEventPublisher;
 import library.model.Book;
 import library.model.BookStatus;
 import library.repository.BookRepository;
@@ -43,6 +44,9 @@ class BookServiceTest {
     @Mock
     private BookRepository repository;
 
+    @Mock
+    private BookEventPublisher eventPublisher;
+
     @InjectMocks
     private BookService service;
 
@@ -71,6 +75,8 @@ class BookServiceTest {
         assertThat(captor.getValue())
                 .extracting(Book::getIsbn, Book::getTitle)
                 .containsExactly("9780132350884", "Чистый код");
+        // t7: после успешного сохранения публикуется событие book.created
+        verify(eventPublisher).publishCreated(input);
     }
 
     @Test
@@ -83,6 +89,7 @@ class BookServiceTest {
         service.createBook(input);
 
         verify(repository).save(input);
+        verify(eventPublisher).publishCreated(input);
     }
 
     @Test
@@ -96,7 +103,8 @@ class BookServiceTest {
                     .isInstanceOf(InvalidIsbnException.class)
                     .hasMessageContaining(bad);
         }
-        verifyNoInteractions(repository);
+        // невалидная книга не сохраняется и событие не публикуется
+        verifyNoInteractions(repository, eventPublisher);
     }
 
     @Test
@@ -107,7 +115,7 @@ class BookServiceTest {
 
         assertThatThrownBy(() -> service.createBook(input))
                 .isInstanceOf(InvalidIsbnException.class);
-        verifyNoInteractions(repository);
+        verifyNoInteractions(repository, eventPublisher);
     }
 
     @Test
@@ -124,6 +132,7 @@ class BookServiceTest {
 
         assertThat(saved).isSameAs(random);
         verify(repository).save(random);
+        verify(eventPublisher).publishCreated(random);
     }
 
     // ---------- findById ----------
