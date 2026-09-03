@@ -33,3 +33,16 @@ app:
 
 server:
   port: 8080
+
+# t8 (Б17): Actuator. По умолчанию через web доступен только health (эндпоинты
+# включаются management.endpoints.web.exposure.include). show-details=always — для
+# показа на занятии (в проде обычно never или when-authorized: детали раскрывают
+# инфраструктуру — версии, состояние БД).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always

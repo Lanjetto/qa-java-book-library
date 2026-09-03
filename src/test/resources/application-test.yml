@@ -14,3 +14,10 @@ spring:
     open-in-view: false
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.yaml
+
+# t8: Actuator в тестах. Rabbit-индикатор здоровья отключаем — в профиле test брокера нет
+# (публикатор Noop), иначе /actuator/health падал бы в DOWN/503 из-за недоступного RabbitMQ.
+management:
+  health:
+    rabbit:
+      enabled: false

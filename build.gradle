@@ -34,6 +34,8 @@ dependencies {
     // t7: Spring Security (basic auth) + RabbitMQ (событие book.created) — Б16
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
+    // t8: Actuator — /actuator/health как «точка живости» для smoke-теста (Б17)
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
     // драйверы БД: Postgres — «продовый» профиль; H2 — только для тестов (профиль test)
     runtimeOnly 'org.postgresql:postgresql'
     testRuntimeOnly 'com.h2database:h2'

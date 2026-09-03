@@ -12,6 +12,8 @@ import org.instancio.Instancio;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -37,8 +39,15 @@ import static org.mockito.Mockito.when;
  *
  * <p>Строгие стабы (MockitoExtension по умолчанию): неиспользуемый стаб роняет тест — каждый тест
  * описывает ровно то поведение, которое проверяет.
+ *
+ * <p>t8 (Б17): класс помечен {@code @Execution(CONCURRENT)} — это пример «безопасной параллели»:
+ * у каждого теста свои mock-объекты (MockitoExtension создаёт новый экземпляр на тест), общей БД
+ * и общего состояния нет, поэтому методы можно гонять одновременно (настройка пула — в
+ * junit-platform.properties). Тестам с общим Spring-контекстом/H2 такая параллель НЕ подходит —
+ * см. комментарий в junit-platform.properties и README ветки.
  */
 @ExtendWith(MockitoExtension.class)
+@Execution(ExecutionMode.CONCURRENT)
 class BookServiceTest {
 
     @Mock
