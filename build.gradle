@@ -36,12 +36,40 @@ dependencies {
     testRuntimeOnly 'com.h2database:h2'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'org.assertj:assertj-core:3.27.7'
+    // t5: REST Assured (Б13), Mockito-юнит сервиса и Instancio (Б14) — генерация случайных данных.
+    // Mockito уже приходит в starter-test; пин 5.23.0 — чтобы версии core/junit-jupiter не разъехались.
+    testImplementation 'io.rest-assured:rest-assured:5.5.7'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.23.0'
+    testImplementation 'org.instancio:instancio-junit:5.6.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        // Интеграционные тесты (REST Assured против Postgres, позднее — Testcontainers/Rabbit)
+        // помечены @Tag("docker") и в локальный прогон НЕ входят (им нужна БД).
+        excludeTags 'docker'
+    }
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+    }
+}
+
+// Отдельная таска для тегов "docker": локально без Docker её можно прогнать против
+// Windows-службы PostgreSQL (см. README ветки), на машине преподавателя — против docker-compose
+// или Testcontainers (ветка t6). В `check`/`build` НЕ входит — запускается явно.
+tasks.register('integrationTest', Test) {
+    description = 'Интеграционные тесты @Tag("docker") — нужна Postgres (compose в WSL либо Testcontainers).'
+    group = 'verification'
+    // Ручной Test-таске нужно явно указать тестовый source set (Java-плагин делает это сам
+    // только для встроенной таски test).
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'docker'
+    }
     testLogging {
         events 'passed', 'failed', 'skipped'
         exceptionFormat 'full'

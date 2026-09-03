@@ -1,83 +1,79 @@
-# book-library — демо «библиотека книг» (ветка `t4-jpa-postgres-liquibase`)
+# book-library — демо «библиотека книг» (ветка `t5-restassured-mockito-testdata`)
 
-Ветка-контрольная точка `t4` переносит данные из памяти в **Postgres**: доступ — Spring Data JPA,
-схема — **Liquibase**-миграциями, Hibernate схему не создаёт (`ddl-auto: validate`). Это блоки
-**Б11** (Postgres в Docker + JPA + Liquibase) и **Б12** (Spring Test: `@SpringBootTest` / `@WebMvcTest` /
-`@DataJpaTest`, профили) Дня 2. Учебные классы Дня 1 удалены.
+Ветка-контрольная точка `t5` добавляет **тестовые данные и моки** (Б13–Б14): главный API-инструмент
+курса — **REST Assured**, фабрику данных `BookMother`, генератор `Instancio`, Mockito-юниты сервиса
+и разбор темы timezone/`Instant`. **main-код не меняется** — только тестовая инфраструктура.
 
-## 1. Что уже есть (из `t3`)
+## 1. Что уже есть (из `t4`)
 
-- Spring Boot Web REST `BookApi` (`/api/books`): CRUD, поиск `?search=`, DTO (record), `@RestControllerAdvice`.
-- Домен `Book`/`Author`/`BookStatus`; `BookService` c `updateBook/deleteById`; in-memory хранилище.
+- Spring Boot REST `BookApi` (`/api/books`) на Spring Data JPA + Liquibase (Postgres/H2-профиль).
+- Тесты Spring Test: `BookRepositoryTest` (`@DataJpaTest`), `BookApiSliceTest` (`@WebMvcTest`),
+  `BookApiContextTest` (`@SpringBootTest` + TestRestTemplate, H2).
 
-## 2. Что добавлено в `t4`
+## 2. Что добавлено в `t5`
 
-- **Spring Data JPA**: `library.repository.BookRepository extends JpaRepository<Book, Long>` +
-  derived-методы `findByIsbn`, `findByTitleContainingIgnoreCase`, `findByStatus`, `findAllByOrderByIdAsc`.
-- **JPA-сущности** (`library.model`):
-  - `Book` — `@Entity @Table(name="books")`, `@Id @GeneratedValue(IDENTITY)`,
-    `@Enumerated(EnumType.STRING) status`, `Instant createdAt` (**TIMESTAMPTZ**), проставляется в `@PrePersist`.
-  - автор — `@Embeddable` `Author` (колонки `author_full_name`/`author_birth_year` в таблице `books`,
-    без отдельной таблицы и **без id** автора — канон t4: книга владеет копией автора).
-- **Liquibase**: `db/changelog/db.changelog-master.yaml`, changeset `1-create-books`; при старте создаётся
-  `books`, выполненное помечается в `DATABASECHANGELOG` (повторный старт не дублирует).
-  `Hibernate ddl-auto: validate` — только сверяет сущности со схемой.
-- **Конфигурация**: `application.yml` — профиль по умолчанию Postgres (`localhost:5434/library`);
-  `docker-compose.yml` — `postgres:16` (порт 5434 наружу).
-- **Тесты** (профиль `test` → **H2** `MODE=PostgreSQL`, схема — те же Liquibase-миграции):
-  - `BookRepositoryTest` — `@DataJpaTest`: срез JPA-слоя, каждый тест в транзакции с откатом;
-  - `BookApiContextTest` — `@SpringBootTest(RANDOM_PORT)`: полный контекст + HTTP-CRUD по TestRestTemplate
-    (это и есть «локальный bootRun» без Docker и источник покрытия `BookService`);
-  - `BookApiSliceTest` — `@WebMvcTest(BookApi.class)`: web-слой с моком сервиса (`@MockitoBean`).
-- **`BookDto`** дополнен `createdAt` (в JSON сериализуется в UTC с «Z»). `Author`-значение: REST-контракт
-  принимает автора строкой (полное имя) → `new Author(name, 0)`.
-- **Удалены** (переезд на БД): учебные `Person`/`Reader`/`Librarian`/`App`/`DebugDemo` и
-  `BookStorage`/`InMemoryBookStorage`; `BookService` ужат до REST-операций (хранилище заменено репозиторием).
+- **Зависимости (test):** `rest-assured 5.5.7`, `mockito-junit-jupiter 5.23.0`, `instancio-junit 5.6.0`.
+- **`build.gradle`:** интеграционные тесты с `@Tag("docker")` **исключены из дефолтного `test`** и вынесены
+  в отдельную таску `integrationTest` (им нужна настоящая Postgres-БД).
+- **Тестовые данные (Б14):**
+  - `src/test/java/library/testdata/BookMother.java` — фабрика Object Mother: готовые `CreateBookRequest`
+    (`cleanCode()`, `effectiveJava()`, `unique()` с уникальным ISBN), доменные `Book`, `uniqueIsbn()`.
+  - генерация случайных объектов `Instancio` — пример использования в `BookServiceTest`
+    (книга с «правильным» ISBN через `set(field(...))`).
+- **REST Assured (Б13):**
+  - `src/test/java/library/api/BookApiSpecs.java` — `RequestSpecification`/`ResponseSpecification`
+    (убирают дублирование contentType/статуса);
+  - `src/test/java/library/api/BookCrudTest.java` — интеграционный CRUD `@Tag("docker")` против Postgres:
+    создать 201 → прочитать → PATCH → удалить 204 → 404; негативные 404/400; список.
+- **Mockito-юнит (Б14.4):** `src/test/java/library/service/BookServiceTest.java` —
+  `@ExtendWith(MockitoExtension.class)`, `@Mock BookRepository`, `@InjectMocks BookService`;
+  покрывает ветки, не достижимые сквозным HTTP-тестом (невалидный ISBN, пустой поиск, отсутствующая книга).
+- **Timezone/Instant (Б14.2):** `src/test/java/library/api/BookDateConsistencyTest.java` — `@Tag("docker")`,
+  сверяет `createdAt` из JSON API и из БД на настоящем Postgres (`TIMESTAMPTZ` = момент в UTC).
 
-### Замечания по схеме и домену
+### Замечания (сверено с реальным контрактом t4)
 
-- Колонка года названа **`publication_year`**, а не `year`: `YEAR` — зарезервированное слово в H2
-  (и ряде СУБД). На Postgres допустимо и `year`, но переносимый вариант — `publication_year`.
-- Год рождения автора через REST не передаётся (автор — строка), поэтому в БД у книг, созданных через API,
-  `author_birth_year = 0`; вручную его можно задать в `psql`/тесте (`@DataJpaTest`).
-- Поиск `?search=` остался фильтром по списку на уровне Java (см. комментарий в `BookService.search`).
+- Автор в REST-контракте — **строка** (полное имя), а не объект; `status` обязателен (в `BookMother`
+  всегда AVAILABLE, при необходимости меняется в тесте). Это расхождение текста day2/SCRIPT.md
+  с фактическим кодом зафиксировано в HANDOFF (§6.1) и правится в Фазе 4.
+- Негативный сценарий «дубликат ISBN → 409» НЕ добавлен: продукт не отдаёт 409 (нет обработки
+  конфликта уникальности). В t5 негативные сценарии — 404 и 400 от bean-валидации.
 
 ## 3. Как запустить / проверить
 
-**Локально, без Docker (проверено на Windows):** тесты сами поднимают контекст + Liquibase на H2.
+**Юниты и H2-слайсы — локально, без Docker:**
 ```
-./gradlew build      # 15 тестов + JaCoCo (порог ≥0.85 на library.service.*)
+./gradlew build        # 34 теста + JaCoCo (порог ≥0.85 на library.service.*)
 ```
-**Против настоящего Postgres** (Liquibase применяется к реальной БД):
-```
-docker compose up -d postgres        # на машине преподавателя — из WSL2
-./gradlew bootRun                    # http://localhost:8080
-```
-Smoke (ASCII-тело; кириллицу слать файлом в UTF-8 — иначе curl в Windows bash ломает кодировку):
-```
-curl -s -X POST http://localhost:8080/api/books -H "Content-Type: application/json" \
-     -d '{"isbn":"9780132350884","title":"Clean Code","author":"Martin","year":2008,"price":3000.00,"status":"AVAILABLE"}'
-curl -s http://localhost:8080/api/books
-```
-Проверить, что схема реально легла в БД (из WSL/psql):
-```sql
-SELECT id, isbn, title, author_full_name, author_birth_year, created_at FROM books;
-SELECT id, author, filename FROM DATABASECHANGELOG;   -- содержит 1-create-books
-```
-> **Где проверено:** сборка и тесты — локально (Windows, `./gradlew build` ✅). Liquibase-миграции и CRUD
-> **против настоящего Postgres** — проверено в этой сессии на локальной БД (Windows-служба PostgreSQL,
-> та же `db.changelog-master.yaml`; канонный вариант для слушателей — `postgres:16` из `docker-compose.yml`).
+**Интеграционные (`@Tag("docker")`) против настоящего Postgres:**
 
-## 4. Задание «сделай сам» (Б11–Б12)
+Вариант для слушателей — Postgres из `docker-compose.yml` (поднимается в WSL):
+```bash
+docker compose up -d postgres
+wsl -e bash -lc "cd ~/book-library && ./gradlew integrationTest"
+```
+Локально без Docker — против Windows-службы PostgreSQL (в этой сессии проверено на PG17, БД `library_t5`):
+```bash
+psql -U postgres -h localhost -p 5432 -c "CREATE DATABASE library_t5;"
+SPRING_DATASOURCE_URL='jdbc:postgresql://localhost:5432/library_t5' \
+SPRING_DATASOURCE_USERNAME=postgres SPRING_DATASOURCE_PASSWORD=root \
+  ./gradlew integrationTest
+psql -U postgres -h localhost -p 5432 -c "DROP DATABASE library_t5;"
+```
+> **Где проверено:** `./gradlew build` локально (Windows, ✅); `integrationTest` (BookCrudTest +
+> BookDateConsistencyTest) — против настоящего Postgres 17 на `localhost:5432` (✅, 5 тестов).
+> Контракт `TIMESTAMPTZ`/`Instant`/JSON-UTC подтверждён на реальной БД, а не только на H2.
 
-1. Добавь Liquibase-миграцию (новый changeset `2-add-pages`): колонка `pages INT` в `books`; перезапусти
-   приложение и убедись, что миграция применилась один раз, а повторный старт её не дублирует.
-2. Добавь в `BookRepository` производный метод (например, `List<Book> findByYear(int year)`) и напиши
-   `@DataJpaTest` на него (по образцу `BookRepositoryTest`).
-3. Сравни три вида тестов на одном домене: `@DataJpaTest` / `@WebMvcTest` / `@SpringBootTest` —
-   что каждый поднимает и почему `@DataJpaTest` откатывает данные, а HTTP-тест (`BookApiContextTest`) — нет.
+## 4. Задание «сделай сам» (Б13–Б14)
+
+1. Расширь `BookMother`: книга в статусе «в резерве» (`RESERVED`); добавь негативный сценарий REST Assured
+   (404/400) в `BookCrudTest`.
+2. Перепиши один «старый» тест с ручным `init()` на `@BeforeEach` + фабрику `BookMother` (Б14.5:
+   маленькими шагами, зелёный прогон до и после).
+3. Попробуй REST Assured JSON Schema: подключи модуль `json-schema-validator`, схему
+   `src/test/resources/schemas/book.json` — по образцу из `QA\v2\10-rest-api.md`.
 
 ## 5. Следующая ветка
 
-`t5-restassured-mockito-testdata` — тестовые данные (`BookMother`/Instancio), Mockito-юниты сервиса,
-интеграционный `BookCrudTest` на **REST Assured**, тест timezone/Instant (Б13–Б14).
+`t6-testcontainers-e2e` — внешний Postgres в интеграционных тестах заменяется **Testcontainers**-контейнером
+(тест сам поднимает БД и накатывает Liquibase); `BookCrudTest` становится e2e (Б15).
