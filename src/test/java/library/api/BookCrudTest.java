@@ -2,6 +2,7 @@ package library.api;
 
 import io.restassured.RestAssured;
 import library.api.dto.CreateBookRequest;
+import library.testcontainers.AbstractPostgresIT;
 import library.testdata.BookMother;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,21 +25,20 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.notNullValue;
 
 /**
- * Интеграционный CRUD по HTTP на REST Assured (Б13, ветка t5).
+ * Интеграционный e2e-CRUD по HTTP на REST Assured (Б13 + Б15, ветки t5/t6).
  *
- * <p>В отличие от {@code BookApiContextTest} (ветка t4, TestRestTemplate на H2), этот тест поднимает
- * приложение на {@link org.springframework.boot.web.server.WebServerApplicationContext} с **настоящим
- * Postgres** (профиль по умолчанию из application.yml → {@code docker-compose.yml} в WSL / Testcontainers)
- * и ходит через REST Assured DSL: {@code given().when().then()} читается как предложение.
+ * <p>Приложение поднимается целиком ({@code @SpringBootTest}) и ходит через REST Assured DSL:
+ * {@code given().when().then()} читается как предложение. Postgres — НЕ внешний и НЕ docker-compose:
+ * тест сам поднимает контейнер (Testcontainers, {@link AbstractPostgresIT}), т.е. e2e самодостаточен.
  *
  * <p>Тест помечен {@code @Tag("docker")} — в дефолтный {@code ./gradlew test} не входит и запускается
- * таской {@code integrationTest} (см. §7.3 HANDOFF). HTTP-тест ходит «наружу», поэтому {@code @Transactional}
- * тут не спасает: сервер коммитит сам. Изоляцию данных обеспечиваем уникальными ISBN
- * ({@link BookMother#unique()}) и удалением созданного в {@code @AfterEach}.
+ * таской {@code integrationTest} там, где есть Docker. HTTP-тест ходит «наружу», поэтому
+ * {@code @Transactional} тут не спасает: сервер коммитит сам. Изоляцию данных обеспечиваем уникальными
+ * ISBN ({@link BookMother#unique()}) и удалением созданного в {@code @AfterEach}.
  */
 @Tag("docker")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class BookCrudTest {
+class BookCrudTest extends AbstractPostgresIT {
 
     @LocalServerPort
     private int port;

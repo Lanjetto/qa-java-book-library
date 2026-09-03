@@ -4,6 +4,7 @@ import io.restassured.RestAssured;
 import library.api.dto.CreateBookRequest;
 import library.model.Book;
 import library.repository.BookRepository;
+import library.testcontainers.AbstractPostgresIT;
 import library.testdata.BookMother;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,18 +29,18 @@ import static org.hamcrest.Matchers.matchesPattern;
 /**
  * Тест консистентности времени (Б14.2, «timezone в БД расходится с локальным»).
  *
- * <p>На настоящем Postgres ({@code @Tag("docker")}): колонка {@code created_at} объявлена
- * как {@code TIMESTAMP WITH TIME ZONE}, {@link Book#getCreatedAt()} — {@link Instant} (абсолютный
- * момент в UTC), JSON-сериализация Instant даёт ISO-8601 с «Z». Сверяем, что значение, ушедшее
- * в JSON (прошло через БД и обратно), совпадает с тем, что реально лежит в БД, — и что формат
- * строки UTC, а не локальный пояс JVM/сервера.
+ * <p>На настоящем Postgres (контейнер Testcontainers, {@link AbstractPostgresIT}, {@code @Tag("docker")}):
+ * колонка {@code created_at} объявлена как {@code TIMESTAMP WITH TIME ZONE}, {@link Book#getCreatedAt()} —
+ * {@link Instant} (абсолютный момент в UTC), JSON-сериализация Instant даёт ISO-8601 с «Z». Сверяем,
+ * что значение, ушедшее в JSON (прошло через БД и обратно), совпадает с тем, что реально лежит в БД, —
+ * и что формат строки UTC, а не локальный пояс JVM/сервера.
  *
  * <p>Сравниваем моменты, а не строки (Instant против Instant); хрупкая привязка к локальной зоне
  * и {@code -Duser.timezone} тут не нужна.
  */
 @Tag("docker")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class BookDateConsistencyTest {
+class BookDateConsistencyTest extends AbstractPostgresIT {
 
     @LocalServerPort
     private int port;
