@@ -27,6 +27,23 @@ repositories {
     mavenCentral()
 }
 
+// t10 (Б20): Netty для Gatling 3.15 нужен 4.2 (класс io.netty.channel.IoHandle), но Spring Boot BOM
+// через io.spring.dependency-management прибивает netty к 4.1 — в gatlingRuntimeClasspath резолвится
+// 4.1.x, и gatlingRun падает NoClassDefFoundError: io/netty/channel/IoHandle.
+// Поднимаем netty до версии, которую просит сам Gatling, ТОЛЬКО для gatling-конфигураций
+// (на main/test/приложение правило не влияет).
+configurations.configureEach {
+    if (name.startsWith('gatling')) {
+        resolutionStrategy.eachDependency {
+            // netty-tcnative-* (boringssl, classes) имеет СВОЮ нумерацию версий (2.0.x) —
+            // её не трогаем, иначе «Could not find netty-tcnative-*:4.2.14.Final».
+            if (requested.group == 'io.netty' && !requested.name.startsWith('netty-tcnative')) {
+                useVersion '4.2.14.Final'
+            }
+        }
+    }
+}
+
 dependencies {
     compileOnly 'org.projectlombok:lombok:1.18.46'
     annotationProcessor 'org.projectlombok:lombok:1.18.46'
